@@ -13,15 +13,34 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final WebSocketChannel channel = IOWebSocketChannel.connect('wss://edge-chat-demo.cloudflareworkers.com/api/room/11ws23/websocket');
   final List<Map> _messages = [];
+  final String currentUser = "vijay"; // Current user's name
 
   void _sendMessage() {
     if (_controller.text.isNotEmpty) {
-      channel.sink.add(jsonEncode({"message": _controller.text,"name":"vijay","timestamp":  DateTime.now().millisecondsSinceEpoch }));
+      final message = {
+        "message": _controller.text,
+        "name": currentUser,
+        "timestamp": DateTime.now().millisecondsSinceEpoch,
+      };
+      channel.sink.add(jsonEncode(message));
       setState(() {
-        // _messages.add(_controller.text);
+        _messages.add(message);
         _controller.clear();
       });
     }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    channel.stream.listen((data) {
+      final response = jsonDecode(data) as Map;
+      if (response.containsKey("message") && response["name"] != currentUser) {
+        setState(() {
+          _messages.add(response);
+        });
+      }
+    });
   }
 
   @override
@@ -33,35 +52,23 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           Expanded(
-            child: StreamBuilder(
-              stream: channel.stream,
-              builder: (context, snapshot) {
-                if (snapshot.hasData) {
-                  print(jsonDecode(snapshot.data!.toString()));
-                  final response = jsonDecode(snapshot.data!.toString()) as Map;
-                  if (response.containsKey("message")) {
-                    _messages.add(response);
-                  }                 
-                }
-                return ListView.builder(
-                  itemCount: _messages.length,
-                  itemBuilder: (context, index) {
-                    return ListTile(
-                      title: Align(
-                        alignment: index % 2 == 0
-                            ? Alignment.centerLeft
-                            : Alignment.centerRight,
-                        child: Container(
-                          padding: EdgeInsets.all(8.0),
-                          decoration: BoxDecoration(
-                            color: index % 2 == 0 ? Colors.blue[100] : Colors.green[100],
-                            borderRadius: BorderRadius.circular(8.0),
-                          ),
-                          child: Text(_messages[index]["message"]),
-                        ),
+            child: ListView.builder(
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                final message = _messages[index];
+                final isCurrentUser = message["name"] == currentUser;
+                return ListTile(
+                  title: Align(
+                    alignment: isCurrentUser ? Alignment.centerRight : Alignment.centerLeft,
+                    child: Container(
+                      padding: EdgeInsets.all(8.0),
+                      decoration: BoxDecoration(
+                        color: isCurrentUser ? Colors.green[100] : Colors.blue[100],
+                        borderRadius: BorderRadius.circular(8.0),
                       ),
-                    );
-                  },
+                      child: Text(message["message"]),
+                    ),
+                  ),
                 );
               },
             ),
